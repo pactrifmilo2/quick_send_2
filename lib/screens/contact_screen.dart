@@ -6,6 +6,8 @@ import 'package:shared_preferences/shared_preferences.dart';
 import '../models/contact.dart';
 import '../services/api_service.dart';
 import '../widgets/contact_card.dart';
+import '../widgets/test_sms_button.dart';
+
 
 class ContactScreen extends StatefulWidget {
   const ContactScreen({super.key});
@@ -80,7 +82,10 @@ class _ContactScreenState extends State<ContactScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: const Text('Contacts')),
+      appBar: AppBar(title: const Text('Contacts'),
+      actions: const [
+    TestSmsButton(), // <--- here
+  ],),
       body: Column(
         children: [
           // URL input row

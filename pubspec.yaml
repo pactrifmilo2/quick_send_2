@@ -16,6 +16,7 @@ dependencies:
       url: https://github.com/pactrifmilo2/Telephony
       ref: develop
   shared_preferences: ^2.5.3
+  android_intent_plus: ^5.3.1
 
 dev_dependencies:
   flutter_test:
