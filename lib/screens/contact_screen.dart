@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:another_telephony/telephony.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:flutter/services.dart';
 
 import '../models/contact.dart';
 import '../services/api_service.dart';
@@ -16,12 +17,10 @@ class ContactScreen extends StatefulWidget {
 class _ContactScreenState extends State<ContactScreen> {
   final Telephony telephony = Telephony.instance;
 
-  late final TextEditingController _urlCtrl = TextEditingController(
-    text: ApiService.defaultUrl,
-  );
+  late final TextEditingController _urlCtrl =
+      TextEditingController(text: ApiService.defaultUrl);
 
   late Future<List<Contact>> _future;
-
   static const _prefsKey = 'api_url';
 
   final Set<String> _selected = <String>{};
@@ -73,8 +72,7 @@ class _ContactScreenState extends State<ContactScreen> {
 
   void _toggleSelectAll(List<Contact> contacts) {
     final allKeys = contacts.map((c) => c.maCB).toSet();
-    final allSelected =
-        _selected.length == allKeys.length && allKeys.isNotEmpty;
+    final allSelected = _selected.length == allKeys.length && allKeys.isNotEmpty;
 
     setState(() {
       if (allSelected) {
@@ -85,6 +83,169 @@ class _ContactScreenState extends State<ContactScreen> {
           ..addAll(allKeys);
       }
     });
+  }
+
+  // ---------- Popup (dialog) ----------
+  Future<void> _openContactDialog(Contact c) async {
+  final msgCtrl = TextEditingController(text: c.texSMS);
+  final tele = Telephony.instance;
+
+  await showDialog<void>(
+    context: context,
+    builder: (ctx) {
+      return AlertDialog(
+        title: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              c.name,
+              style: const TextStyle(
+                fontSize: 20,
+                fontWeight: FontWeight.bold,
+                color: Colors.black,
+              ),
+            ),
+            const SizedBox(height: 4),
+            Text(
+              c.phone,
+              style: const TextStyle(
+                fontSize: 20, // same as name
+                fontWeight: FontWeight.bold,
+                color: Colors.black, // same as name
+              ),
+            ),
+          ],
+        ),
+        content: SingleChildScrollView(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const Divider(height: 16),
+              const Text(
+                'Message (TexSMS)',
+                style: TextStyle(fontWeight: FontWeight.w600),
+              ),
+              const SizedBox(height: 6),
+              TextField(
+                controller: msgCtrl,
+                minLines: 4,
+                maxLines: 8,
+                decoration: const InputDecoration(
+                  border: OutlineInputBorder(),
+                  isDense: true,
+                ),
+              ),
+            ],
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () {
+              Clipboard.setData(ClipboardData(text: msgCtrl.text));
+              if (ctx.mounted) {
+                ScaffoldMessenger.of(ctx).showSnackBar(
+                  const SnackBar(content: Text('Copied message')),
+                );
+              }
+            },
+            child: const Text('Copy'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.of(ctx).pop(),
+            child: const Text('Close'),
+          ),
+          FilledButton.icon(
+            icon: const Icon(Icons.send),
+            label: const Text('Send'),
+            onPressed: () async {
+              final granted = await tele.requestPhoneAndSmsPermissions ?? false;
+              if (!granted) {
+                if (ctx.mounted) {
+                  ScaffoldMessenger.of(ctx).showSnackBar(
+                    const SnackBar(content: Text('SMS permission not granted')),
+                  );
+                }
+                return;
+              }
+
+              final SmsSendStatusListener listener = (s) {
+                if (ctx.mounted) {
+                  ScaffoldMessenger.of(ctx).showSnackBar(
+                    SnackBar(content: Text('SMS status: $s')),
+                  );
+                }
+              };
+
+              try {
+                await tele.sendSms(
+                  to: c.phone,
+                  message: msgCtrl.text,
+                  isMultipart: true,
+                  statusListener: listener,
+                );
+              } catch (e) {
+                if (ctx.mounted) {
+                  ScaffoldMessenger.of(ctx).showSnackBar(
+                    SnackBar(content: Text('Failed to send: $e')),
+                  );
+                }
+              }
+            },
+          ),
+        ],
+      );
+    },
+  );
+
+  msgCtrl.dispose();
+}
+
+
+  Widget _kv(String k, String v) {
+    return RichText(
+      text: TextSpan(
+        style: DefaultTextStyle.of(context).style,
+        children: [
+          TextSpan(
+            text: '$k: ',
+            style: const TextStyle(fontWeight: FontWeight.w600),
+          ),
+          TextSpan(text: v),
+        ],
+      ),
+    );
+  }
+
+  // ---------- Bulk send from AppBar ----------
+  Future<void> _sendSelected() async {
+    final contacts = (await _future)
+        .where((c) => _selected.contains(c.maCB))
+        .toList();
+
+    if (contacts.isEmpty) return;
+
+    for (final c in contacts) {
+      try {
+        await telephony.sendSms(
+          to: c.phone,
+          message: c.texSMS,
+          isMultipart: true,
+          statusListener: (s) {
+            if (context.mounted) {
+              ScaffoldMessenger.of(context).showSnackBar(
+                SnackBar(content: Text('${c.name} (${c.phone}) → $s')),
+              );
+            }
+          },
+        );
+      } catch (e) {
+        if (context.mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text('Failed to send to ${c.name}: $e')),
+          );
+        }
+      }
+    }
   }
 
   @override
@@ -117,48 +278,13 @@ class _ContactScreenState extends State<ContactScreen> {
           IconButton(
             tooltip: 'Send to selected',
             icon: const Icon(Icons.send),
-            onPressed: _selected.isEmpty
-                ? null
-                : () async {
-                    final contacts = (await _future)
-                        .where((c) => _selected.contains(c.maCB))
-                        .toList();
-
-                    for (final c in contacts) {
-                      try {
-                        await telephony.sendSms(
-                          to: c.phone,
-                          message: c.texSMS,
-                          isMultipart: true,
-                          statusListener: (status) {
-                            if (context.mounted) {
-                              ScaffoldMessenger.of(context).showSnackBar(
-                                SnackBar(
-                                  content: Text(
-                                    '${c.name} (${c.phone}) → $status',
-                                  ),
-                                ),
-                              );
-                            }
-                          },
-                        );
-                      } catch (e) {
-                        if (context.mounted) {
-                          ScaffoldMessenger.of(context).showSnackBar(
-                            SnackBar(
-                              content: Text('Failed to send to ${c.name}: $e'),
-                            ),
-                          );
-                        }
-                      }
-                    }
-                  },
+            onPressed: _selected.isEmpty ? null : _sendSelected,
           ),
         ],
       ),
-
       body: Column(
         children: [
+          // URL input row
           Padding(
             padding: const EdgeInsets.fromLTRB(12, 12, 12, 4),
             child: Row(
@@ -185,6 +311,7 @@ class _ContactScreenState extends State<ContactScreen> {
             ),
           ),
           const Divider(height: 1),
+          // List
           Expanded(
             child: FutureBuilder<List<Contact>>(
               future: _future,
@@ -222,14 +349,32 @@ class _ContactScreenState extends State<ContactScreen> {
                           }
                         });
                       },
-                      onTap: () {
-                        setState(() {
-                          if (isSelected) {
-                            _selected.remove(key);
-                          } else {
-                            _selected.add(key);
+                      onOpen: () => _openContactDialog(c),
+                      onQuickSend: () async {
+                        try {
+                          await telephony.sendSms(
+                            to: c.phone,
+                            message: c.texSMS,
+                            isMultipart: true,
+                            statusListener: (s) {
+                              if (context.mounted) {
+                                ScaffoldMessenger.of(context).showSnackBar(
+                                  SnackBar(
+                                      content:
+                                          Text('${c.name} (${c.phone}) → $s')),
+                                );
+                              }
+                            },
+                          );
+                        } catch (e) {
+                          if (context.mounted) {
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              SnackBar(
+                                  content: Text(
+                                      'Failed to send to ${c.name}: $e')),
+                            );
                           }
-                        });
+                        }
                       },
                     );
                   },

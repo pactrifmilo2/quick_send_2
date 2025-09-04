@@ -8,61 +8,17 @@ class ContactCard extends StatelessWidget {
   final Contact contact;
   final bool selected;
   final ValueChanged<bool?> onSelectedChanged;
-  final VoidCallback? onTap;
+  final VoidCallback onOpen; // open popup
+  final VoidCallback? onQuickSend; // optional: quick send from the card
 
   const ContactCard({
     super.key,
     required this.contact,
     required this.selected,
     required this.onSelectedChanged,
-    this.onTap,
+    required this.onOpen,
+    this.onQuickSend,
   });
-
-  Future<void> _sendSms(BuildContext context) async {
-    final bool granted =
-        await _telephony.requestPhoneAndSmsPermissions ?? false;
-    if (!granted) {
-      if (!context.mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('SMS permission not granted')),
-      );
-      return;
-    }
-
-    final bool? capable = await _telephony.isSmsCapable;
-    final SimState? sim = await _telephony.simState;
-    if (capable != true || sim != SimState.READY) {
-      if (!context.mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Cannot send SMS (capable=$capable, sim=$sim)')),
-      );
-      return;
-    }
-
-    final SmsSendStatusListener listener = (SendStatus status) {
-      if (!context.mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('SMS status: $status')),
-      );
-    };
-
-    try {
-      await _telephony.sendSms(
-        to: contact.phone,
-        message: contact.texSMS,
-        isMultipart: true,
-        statusListener: listener,
-      );
-    } catch (e) {
-      if (!context.mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(
-              'Failed to send SMS. If dual-SIM, set default SIM for SMS. Error: $e'),
-        ),
-      );
-    }
-  }
 
   @override
   Widget build(BuildContext context) {
@@ -89,10 +45,10 @@ class ContactCard extends StatelessWidget {
         trailing: IconButton(
           icon: const Icon(Icons.send),
           color: Colors.green,
-          tooltip: 'Send SMS',
-          onPressed: () => _sendSms(context),
+          tooltip: 'Quick send SMS',
+          onPressed: onQuickSend,
         ),
-        onTap: onTap,
+        onTap: onOpen, // open the popup
       ),
     );
   }
