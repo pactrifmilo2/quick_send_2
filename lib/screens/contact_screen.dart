@@ -1,4 +1,3 @@
-// lib/screens/contact_screen.dart
 import 'package:flutter/material.dart';
 import 'package:another_telephony/telephony.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -6,8 +5,6 @@ import 'package:shared_preferences/shared_preferences.dart';
 import '../models/contact.dart';
 import '../services/api_service.dart';
 import '../widgets/contact_card.dart';
-import '../widgets/test_sms_button.dart';
-
 
 class ContactScreen extends StatefulWidget {
   const ContactScreen({super.key});
@@ -19,26 +16,21 @@ class ContactScreen extends StatefulWidget {
 class _ContactScreenState extends State<ContactScreen> {
   final Telephony telephony = Telephony.instance;
 
-  // URL text field (prefill with default)
-  late final TextEditingController _urlCtrl =
-      TextEditingController(text: ApiService.defaultUrl);
+  late final TextEditingController _urlCtrl = TextEditingController(
+    text: ApiService.defaultUrl,
+  );
 
-  // Future for loading contacts
   late Future<List<Contact>> _future;
 
   static const _prefsKey = 'api_url';
 
+  final Set<String> _selected = <String>{};
+
   @override
   void initState() {
     super.initState();
-
-    // 1) Initialize with whatever is currently in the controller
     _future = ApiService.fetchContacts(_urlCtrl.text);
-
-    // 2) Load any saved URL and refresh if different
     _loadSavedUrl();
-
-    // 3) Ask SMS permission
     _askPermission();
   }
 
@@ -67,28 +59,106 @@ class _ContactScreenState extends State<ContactScreen> {
   void _loadFromUrl() async {
     await _saveUrl();
     setState(() {
+      _selected.clear();
       _future = ApiService.fetchContacts(_urlCtrl.text);
     });
   }
 
   Future<void> _askPermission() async {
-    final granted =
-        await telephony.requestPhoneAndSmsPermissions ?? false;
+    final granted = await telephony.requestPhoneAndSmsPermissions ?? false;
     if (!granted) {
       debugPrint('SMS permission denied');
     }
   }
 
+  void _toggleSelectAll(List<Contact> contacts) {
+    final allKeys = contacts.map((c) => c.maCB).toSet();
+    final allSelected =
+        _selected.length == allKeys.length && allKeys.isNotEmpty;
+
+    setState(() {
+      if (allSelected) {
+        _selected.clear();
+      } else {
+        _selected
+          ..clear()
+          ..addAll(allKeys);
+      }
+    });
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: const Text('Contacts'),
-      actions: const [
-    TestSmsButton(), // <--- here
-  ],),
+      appBar: AppBar(
+        leading: FutureBuilder<List<Contact>>(
+          future: _future,
+          builder: (context, snapshot) {
+            final total = snapshot.data?.length ?? 0;
+            final allSelected = total > 0 && _selected.length == total;
+
+            return IconButton(
+              tooltip: allSelected ? 'Clear selection' : 'Select all',
+              icon: Icon(allSelected ? Icons.clear_all : Icons.select_all),
+              onPressed: snapshot.hasData
+                  ? () => _toggleSelectAll(snapshot.data!)
+                  : null,
+            );
+          },
+        ),
+        title: FutureBuilder<List<Contact>>(
+          future: _future,
+          builder: (context, snapshot) {
+            final total = snapshot.data?.length ?? 0;
+            return Text('${_selected.length}/$total selected');
+          },
+        ),
+        actions: [
+          IconButton(
+            tooltip: 'Send to selected',
+            icon: const Icon(Icons.send),
+            onPressed: _selected.isEmpty
+                ? null
+                : () async {
+                    final contacts = (await _future)
+                        .where((c) => _selected.contains(c.maCB))
+                        .toList();
+
+                    for (final c in contacts) {
+                      try {
+                        await telephony.sendSms(
+                          to: c.phone,
+                          message: c.texSMS,
+                          isMultipart: true,
+                          statusListener: (status) {
+                            if (context.mounted) {
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                SnackBar(
+                                  content: Text(
+                                    '${c.name} (${c.phone}) → $status',
+                                  ),
+                                ),
+                              );
+                            }
+                          },
+                        );
+                      } catch (e) {
+                        if (context.mounted) {
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            SnackBar(
+                              content: Text('Failed to send to ${c.name}: $e'),
+                            ),
+                          );
+                        }
+                      }
+                    }
+                  },
+          ),
+        ],
+      ),
+
       body: Column(
         children: [
-          // URL input row
           Padding(
             padding: const EdgeInsets.fromLTRB(12, 12, 12, 4),
             child: Row(
@@ -115,7 +185,6 @@ class _ContactScreenState extends State<ContactScreen> {
             ),
           ),
           const Divider(height: 1),
-          // Data area
           Expanded(
             child: FutureBuilder<List<Contact>>(
               future: _future,
@@ -133,16 +202,37 @@ class _ContactScreenState extends State<ContactScreen> {
                 if (contacts.isEmpty) {
                   return const Center(child: Text('No contacts found.'));
                 }
+
                 return ListView.builder(
                   itemCount: contacts.length,
-                  itemBuilder: (context, i) => ContactCard(
-                    contact: contacts[i],
-                    onTap: () {
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        SnackBar(content: Text('Tap on ${contacts[i].name}')),
-                      );
-                    },
-                  ),
+                  itemBuilder: (context, i) {
+                    final c = contacts[i];
+                    final key = c.maCB;
+                    final isSelected = _selected.contains(key);
+
+                    return ContactCard(
+                      contact: c,
+                      selected: isSelected,
+                      onSelectedChanged: (v) {
+                        setState(() {
+                          if (v == true) {
+                            _selected.add(key);
+                          } else {
+                            _selected.remove(key);
+                          }
+                        });
+                      },
+                      onTap: () {
+                        setState(() {
+                          if (isSelected) {
+                            _selected.remove(key);
+                          } else {
+                            _selected.add(key);
+                          }
+                        });
+                      },
+                    );
+                  },
                 );
               },
             ),
