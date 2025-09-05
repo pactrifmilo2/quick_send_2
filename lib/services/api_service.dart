@@ -14,6 +14,25 @@ class ApiService {
     return '$cleanBase/api/ListCustomer?code=${Uri.encodeQueryComponent(cleanCode)}';
   }
 
+    static Future<void> logSend({
+    required String base,
+    required String maCB,
+  }) async {
+    final cleanBase = base.trim().replaceAll(RegExp(r'/+$'), '');
+    final url = '$cleanBase/api/ListCustomer/Log?code=${Uri.encodeQueryComponent(maCB)}';
+
+    try {
+      final res = await http.get(Uri.parse(url));
+      if (res.statusCode != 200) {
+        throw Exception('Log failed: HTTP ${res.statusCode}');
+      }
+    } catch (e) {
+      // Do not crash; just print debug
+      // ignore: avoid_print
+      print('Log error for $maCB: $e');
+    }
+  }
+
   static Future<List<Contact>> fetchContacts({
     required String base,
     required String code,
