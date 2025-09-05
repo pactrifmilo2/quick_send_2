@@ -169,7 +169,7 @@ class _ContactScreenState extends State<ContactScreen> {
       }
       final prefs = await SharedPreferences.getInstance();
       final base = prefs.getString(_baseKey) ?? ApiService.defaultBase;
-      ApiService.logSend(base: base, maCB: c.maCB);
+      ApiService.logSend(base: base, ma: c.ma);
     }
   }
 
@@ -237,7 +237,7 @@ class _ContactScreenState extends State<ContactScreen> {
                 );
                 final prefs = await SharedPreferences.getInstance();
                 final base = prefs.getString(_baseKey) ?? ApiService.defaultBase;
-                ApiService.logSend(base: base, maCB: c.maCB);
+                ApiService.logSend(base: base, ma: c.ma);
               } catch (e) {
                 if (ctx.mounted) {
                   ScaffoldMessenger.of(ctx).showSnackBar(SnackBar(content: Text('Failed: $e')));
@@ -377,7 +377,7 @@ class _ContactScreenState extends State<ContactScreen> {
                         }
                         final prefs = await SharedPreferences.getInstance();
                         final base = prefs.getString(_baseKey) ?? ApiService.defaultBase;
-                        ApiService.logSend(base: base, maCB: c.maCB);
+                        ApiService.logSend(base: base, ma: c.ma);
                       },
                     );
                   },

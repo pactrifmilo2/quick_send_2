@@ -14,24 +14,26 @@ class ApiService {
     return '$cleanBase/api/ListCustomer?code=${Uri.encodeQueryComponent(cleanCode)}';
   }
 
-    static Future<void> logSend({
-    required String base,
-    required String maCB,
-  }) async {
-    final cleanBase = base.trim().replaceAll(RegExp(r'/+$'), '');
-    final url = '$cleanBase/api/ListCustomer/Log?code=${Uri.encodeQueryComponent(maCB)}';
+  static Future<void> logSend({
+  required String base,
+  required String ma,
+}) async {
+  final cleanBase = base.trim().replaceAll(RegExp(r'/+$'), '');
+  final url = '$cleanBase/api/ListCustomer/Log?code=${Uri.encodeQueryComponent(ma)}';
 
-    try {
-      final res = await http.get(Uri.parse(url));
-      if (res.statusCode != 200) {
-        throw Exception('Log failed: HTTP ${res.statusCode}');
-      }
-    } catch (e) {
-      // Do not crash; just print debug
-      // ignore: avoid_print
-      print('Log error for $maCB: $e');
+  try {
+    final res = await http.post(Uri.parse(url));
+    if (res.statusCode != 200) {
+      print('⚠️ Log API failed');
+    } else {
+      print('✅ Log success');
     }
+  } catch (e) {
+    print('❌ Log error');
   }
+}
+
+
 
   static Future<List<Contact>> fetchContacts({
     required String base,
@@ -78,6 +80,7 @@ class ApiService {
 
     return tables.map((t) {
       return Contact(
+        ma:     textOf(t, 'Ma'),
         maCB:   textOf(t, 'MaCB'),
         name:   textOf(t, 'HoTen'),
         phone:  textOf(t, 'DienThoai'),
