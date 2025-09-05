@@ -10,10 +10,10 @@ class ApiConfigScreen extends StatefulWidget {
 }
 
 class _ApiConfigScreenState extends State<ApiConfigScreen> {
-  static const _prefsKey = 'api_url';
+  static const _baseKey = 'api_base';
 
-  late final TextEditingController _ctrl =
-      TextEditingController(text: ApiService.defaultUrl);
+  late final TextEditingController _baseCtrl =
+      TextEditingController(text: ApiService.defaultBase);
 
   bool _loading = true;
 
@@ -25,28 +25,28 @@ class _ApiConfigScreenState extends State<ApiConfigScreen> {
 
   Future<void> _load() async {
     final prefs = await SharedPreferences.getInstance();
-    final saved = prefs.getString(_prefsKey);
-    if (saved != null && saved.isNotEmpty) {
-      _ctrl.text = saved;
+    final savedBase = prefs.getString(_baseKey);
+    if (savedBase != null && savedBase.isNotEmpty) {
+      _baseCtrl.text = savedBase;
     }
     setState(() => _loading = false);
   }
 
   Future<void> _save() async {
     final prefs = await SharedPreferences.getInstance();
-    await prefs.setString(_prefsKey, _ctrl.text.trim());
-    if (mounted) Navigator.of(context).pop(true); // tell caller "changed"
+    await prefs.setString(_baseKey, _baseCtrl.text.trim());
+    if (mounted) Navigator.of(context).pop(true); // notify caller of changes
   }
 
   void _resetToDefault() {
     setState(() {
-      _ctrl.text = ApiService.defaultUrl;
+      _baseCtrl.text = ApiService.defaultBase;
     });
   }
 
   @override
   void dispose() {
-    _ctrl.dispose();
+    _baseCtrl.dispose();
     super.dispose();
   }
 
@@ -69,14 +69,12 @@ class _ApiConfigScreenState extends State<ApiConfigScreen> {
               child: Column(
                 children: [
                   TextField(
-                    controller: _ctrl,
+                    controller: _baseCtrl,
                     decoration: const InputDecoration(
-                      labelText: 'API URL',
-                      hintText: 'Enter XML endpoint…',
+                      labelText: 'API Base',
+                      hintText: 'e.g. http://192.168.1.10:1400',
                       border: OutlineInputBorder(),
                     ),
-                    minLines: 1,
-                    maxLines: 3,
                   ),
                   const SizedBox(height: 12),
                   Row(
@@ -98,6 +96,12 @@ class _ApiConfigScreenState extends State<ApiConfigScreen> {
                         label: const Text('Save'),
                       ),
                     ],
+                  ),
+                  const SizedBox(height: 16),
+                  const Text(
+                    'Final URL = {base}/api/ListCustomer?code={code}\n'
+                    'You can change the code on the Contacts screen.',
+                    style: TextStyle(fontStyle: FontStyle.italic),
                   ),
                 ],
               ),

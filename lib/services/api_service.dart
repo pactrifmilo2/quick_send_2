@@ -4,15 +4,24 @@ import 'package:xml/xml.dart' as xml;
 import '../models/contact.dart';
 
 class ApiService {
-  // Default URL shown in the input box
-  static const String defaultUrl =
-      'http://172.29.102.240:1400/api/ListCustomer?code=PTQT2025';
+  // Defaults
+  static const String defaultBase = 'http://172.29.102.240:1400';
+  static const String defaultCode = 'PTQT2025';
 
-  static Future<List<Contact>> fetchContacts([String? url]) async {
-    final target = (url == null || url.trim().isEmpty) ? defaultUrl : url.trim();
+  static String buildUrl({required String base, required String code}) {
+    final cleanBase = base.trim().replaceAll(RegExp(r'/+$'), ''); // remove trailing /
+    final cleanCode = code.trim();
+    return '$cleanBase/api/ListCustomer?code=${Uri.encodeQueryComponent(cleanCode)}';
+  }
+
+  static Future<List<Contact>> fetchContacts({
+    required String base,
+    required String code,
+  }) async {
+    final url = buildUrl(base: base, code: code);
 
     final res = await http.get(
-      Uri.parse(target),
+      Uri.parse(url),
       headers: {'Accept': 'application/xml, text/xml;q=0.9, */*;q=0.8'},
     );
     if (res.statusCode != 200) {
@@ -21,7 +30,7 @@ class ApiService {
 
     final raw = utf8.decode(res.bodyBytes, allowMalformed: true).trim();
 
-    // Try parse as-is first; if it fails, trim to outer XML-looking block
+    // Parse defensively
     xml.XmlDocument doc;
     try {
       doc = xml.XmlDocument.parse(raw);
@@ -30,7 +39,7 @@ class ApiService {
       final lastGt = raw.lastIndexOf('>');
       if (firstLt == -1 || lastGt <= firstLt) {
         final preview = raw.substring(0, raw.length.clamp(0, 400));
-        throw Exception('Response does not look like XML. Preview:\n$preview');
+        throw Exception('Response is not XML. Preview:\n$preview');
       }
       final xmlString = raw.substring(firstLt, lastGt + 1);
       doc = xml.XmlDocument.parse(xmlString);
@@ -40,12 +49,12 @@ class ApiService {
     if (tables.isEmpty) {
       final root = doc.rootElement.name.toString();
       final preview = raw.substring(0, raw.length.clamp(0, 200));
-      throw Exception('No <Table> elements found (root: $root). Preview:\n$preview');
+      throw Exception('No <Table> elements (root: $root). Preview:\n$preview');
     }
 
     String textOf(xml.XmlElement parent, String tag) {
-      final el = parent.findElements(tag).isEmpty ? null : parent.findElements(tag).first;
-      return el?.text.trim() ?? '';
+      final it = parent.findElements(tag);
+      return it.isEmpty ? '' : it.first.text.trim();
     }
 
     return tables.map((t) {
